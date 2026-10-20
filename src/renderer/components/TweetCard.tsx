@@ -9,13 +9,13 @@ export interface TweetActions {
 
 function Media({ item }: { item: MediaRef }) {
   if (item.type === 'photo') {
-    return <img className="media" src={item.url ?? item.thumbnailUrl} alt={item.altText ?? ''} loading="lazy" />;
+    return <img className="media" src={item.url ?? item.thumbnailUrl} alt={item.altText ?? ''} loading="lazy" decoding="async" />;
   }
   if (!item.url) {
     // X offered no playable mp4 for this video: show its image, say so.
     return (
       <figure className="media-unplayable">
-        <img className="media" src={item.thumbnailUrl} alt={item.altText ?? ''} loading="lazy" />
+        <img className="media" src={item.thumbnailUrl} alt={item.altText ?? ''} loading="lazy" decoding="async" />
         <figcaption>Vidéo non lisible ici</figcaption>
       </figure>
     );

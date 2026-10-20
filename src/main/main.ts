@@ -172,7 +172,10 @@ async function start(): Promise<void> {
       return current.xview;
     },
   });
-  await loadApp(openMainWindow());
+  const window = openMainWindow();
+  // The app opens on "Mon X": start loading x.com while the app page loads.
+  current?.xview.warmUp();
+  await loadApp(window);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length > 0) return;

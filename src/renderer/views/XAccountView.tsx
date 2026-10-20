@@ -25,14 +25,29 @@ export function XAccountView({ url }: { url: string | null }) {
     const element = host.current;
     if (!element) return;
     const api = xapi().xview;
-    api.show(boundsOf(element)).then(report, fail);
-    const observer = new ResizeObserver(() => api.setBounds(boundsOf(element)).then(report, fail));
+    let last = boundsOf(element);
+    api.show(last).then(report, fail);
+
+    // One IPC per frame at most: resizing fires dozens of events per second,
+    // and the ResizeObserver and the window event both report the same change.
+    let frame = 0;
+    const sync = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const next = boundsOf(element);
+        if (next.x === last.x && next.y === last.y && next.width === last.width && next.height === last.height) return;
+        last = next;
+        api.setBounds(next).then(report, fail);
+      });
+    };
+    const observer = new ResizeObserver(sync);
     observer.observe(element);
-    const onResize = () => api.setBounds(boundsOf(element)).then(report, fail);
-    window.addEventListener('resize', onResize);
+    window.addEventListener('resize', sync);
     return () => {
+      cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', sync);
       api.hide().then(report, fail);
     };
   }, []);

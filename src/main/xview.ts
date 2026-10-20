@@ -39,6 +39,8 @@ const DOWNLOAD_DOMAINS = ['x.com', 'twitter.com', 'twimg.com'];
 /** What x.com may ask for; everything else (camera, location...) is refused. */
 const X_PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write', 'fullscreen']);
 const EXTERNAL_OPEN_INTERVAL_MS = 1000;
+/** The app's own background (main.ts), shown by the view until x.com paints. */
+const X_VIEW_BACKGROUND = '#0f1419';
 
 export type XNavigation = 'back' | 'forward' | 'reload' | 'home';
 
@@ -106,6 +108,8 @@ function xSession(): Session {
     X_PERMISSIONS.has(permission) && isXUrl(requestingOrigin),
   );
   xs.setSpellCheckerEnabled(false);
+  // Open the connection to x.com before the first request needs it.
+  xs.preconnect({ url: X_HOME_URL, numSockets: 2 });
   xs.on('will-download', (event, item) => {
     if (!isDownloadAllowed(item.getURL())) {
       console.warn(`Blocked a download from ${originForLog(item.getURL())}.`);
@@ -234,6 +238,8 @@ export class XViewController {
   private ensure(): WebContentsView {
     if (this.view) return this.view;
     const view = new WebContentsView({ webPreferences: xWebPreferences() });
+    // Dark like the app while x.com loads, instead of a white flash.
+    view.setBackgroundColor(X_VIEW_BACKGROUND);
     guardXContents(view.webContents);
     view.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
       // -3 is ERR_ABORTED: a load replaced by another one, not a failure.
@@ -246,6 +252,14 @@ export class XViewController {
     load(view.webContents, X_HOME_URL);
     this.view = view;
     return view;
+  }
+
+  /**
+   * Starts loading x.com now, hidden, in parallel with the app's own page:
+   * the app opens on "Mon X", so the load would otherwise wait for the tab.
+   */
+  warmUp(): void {
+    this.ensure();
   }
 
   show(bounds: ViewBounds): void {

@@ -257,9 +257,13 @@ button {
 .tweet {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  /* Posts far off screen are not laid out or painted: smoother scrolling on long feeds. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
 }
 
 .tweet-nested {
+  content-visibility: visible;
   margin-top: 12px;
   padding: 12px;
   border: 1px solid var(--border);

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { XApi } from '@shared/ipc';
 import type { ApiError, ApiResult } from '@shared/types';
+import { createRemoteCache } from './remoteCache';
 
 declare global {
   interface Window {
@@ -13,6 +14,10 @@ declare global {
 }
 
 export const xapi = (): XApi => window.xapi;
+
+/** Answers kept while moving between tabs: a tab opened again within this time shows them at once. */
+const CACHE_TTL_MS = 2 * 60_000;
+const cache = createRemoteCache<unknown>(CACHE_TTL_MS);
 
 export type Remote<T> =
   | { status: 'idle' }
@@ -23,22 +28,35 @@ export type Remote<T> =
 /**
  * Runs `load` whenever `key` changes (null key: nothing to load). A result
  * that arrives after the key changed is dropped, so a slow answer never
- * overwrites a newer one.
+ * overwrites a newer one. A successful answer is reused for CACHE_TTL_MS
+ * (never an error); `reload()` always asks again.
  */
 export function useRemote<T>(key: string | null, load: () => Promise<ApiResult<T>>): Remote<T> & { reload(): void } {
-  const [state, setState] = useState<Remote<T>>({ status: 'idle' });
+  const [state, setState] = useState<Remote<T>>(() => {
+    const cached = key === null ? undefined : (cache.get(key) as T | undefined);
+    return cached === undefined ? { status: 'idle' } : { status: 'ok', data: cached };
+  });
   const [attempt, setAttempt] = useState(0);
-  const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  const reload = useCallback(() => {
+    if (key !== null) cache.delete(key);
+    setAttempt((n) => n + 1);
+  }, [key]);
 
   useEffect(() => {
     if (key === null) {
       setState({ status: 'idle' });
       return;
     }
+    const cached = cache.get(key) as T | undefined;
+    if (cached !== undefined) {
+      setState({ status: 'ok', data: cached });
+      return;
+    }
     let current = true;
     setState({ status: 'loading' });
     load().then(
       (result) => {
+        if (result.ok) cache.set(key, result.data);
         if (current) setState(result.ok ? { status: 'ok', data: result.data } : { status: 'error', error: result.error });
       },
       (error: unknown) => {
