@@ -1,5 +1,7 @@
 # Twitter Desktop
 
+![Twitter Desktop : client macOS open source pour X](docs/images/social-preview.png)
+
 Un client de bureau macOS pour X (ex-Twitter), open source.
 
 - **Mon X** : le vrai x.com, avec ton compte, dans une fenêtre d'application. Pastille sur l'icône du Dock et notification macOS quand tu as des notifications non lues.
