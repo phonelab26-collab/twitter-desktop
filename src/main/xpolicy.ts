@@ -40,6 +40,19 @@ export function isXUrl(raw: string): boolean {
   return url?.protocol === 'https:' && onDomain(url.hostname, X_DOMAINS);
 }
 
+const X_PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write', 'fullscreen']);
+
+/**
+ * What x.com may ask for. The microphone is allowed (to speak in a Space), the
+ * camera never: a media request passes only when it asks for audio alone.
+ * Everything else (location...) is refused, and so is any non-X page.
+ */
+export function isPermissionAllowed(permission: string, requestingUrl: string, mediaTypes: readonly string[] = []): boolean {
+  if (!isXUrl(requestingUrl)) return false;
+  if (permission === 'media') return mediaTypes.length > 0 && mediaTypes.every((type) => type === 'audio');
+  return X_PERMISSIONS.has(permission);
+}
+
 export type PopupDecision = 'allow' | 'external' | 'deny';
 
 /**

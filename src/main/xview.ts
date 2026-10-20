@@ -15,6 +15,7 @@ import {
   browserUserAgent,
   createOpenLimiter,
   isSignInFlowUrl,
+  isPermissionAllowed,
   isXUrl,
   originForLog,
   popupDecision,
@@ -36,8 +37,6 @@ const X_PARTITION = app.isPackaged ? 'persist:x-account' : 'x-account-memory';
 const X_LOGOUT_URL = 'https://x.com/logout';
 /** Downloads (e.g. a saved image) only from X and its CDN. */
 const DOWNLOAD_DOMAINS = ['x.com', 'twitter.com', 'twimg.com'];
-/** What x.com may ask for; everything else (camera, location...) is refused. */
-const X_PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write', 'fullscreen']);
 const EXTERNAL_OPEN_INTERVAL_MS = 1000;
 /** The app's own background (main.ts), shown by the view until x.com paints. */
 const X_VIEW_BACKGROUND = '#0f1419';
@@ -102,10 +101,11 @@ function xSession(): Session {
   const xs = session.fromPartition(X_PARTITION);
   xs.setUserAgent(browserUserAgent(xs.getUserAgent()));
   xs.setPermissionRequestHandler((_contents, permission, callback, details) => {
-    callback(X_PERMISSIONS.has(permission) && isXUrl(details.requestingUrl));
+    const types = 'mediaTypes' in details ? (details.mediaTypes ?? []) : [];
+    callback(isPermissionAllowed(permission, details.requestingUrl, types));
   });
-  xs.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-    X_PERMISSIONS.has(permission) && isXUrl(requestingOrigin),
+  xs.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
+    isPermissionAllowed(permission, requestingOrigin, details.mediaType ? [details.mediaType] : []),
   );
   xs.setSpellCheckerEnabled(false);
   // Open the connection to x.com before the first request needs it.

@@ -53,7 +53,10 @@
         "dmg",
         "zip"
       ],
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "x.com uses the microphone when you speak in a Space."
+      }
     },
     "linux": {
       "target": [

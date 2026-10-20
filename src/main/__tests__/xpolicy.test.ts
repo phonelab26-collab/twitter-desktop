@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { browserUserAgent, createOpenLimiter, isSignInFlowUrl, isXUrl, popupDecision, sanitizeBounds, webHref } from '../xpolicy';
+import { isPermissionAllowed, browserUserAgent, createOpenLimiter, isSignInFlowUrl, isXUrl, popupDecision, sanitizeBounds, webHref } from '../xpolicy';
 
 describe('isXUrl', () => {
   it('accepts https pages of x.com and twitter.com', () => {
@@ -93,5 +93,30 @@ describe('sanitizeBounds', () => {
     for (const bad of [null, 'x', { x: 1, y: 2, width: 3 }, { x: -1, y: 0, width: 1, height: 1 }, { x: NaN, y: 0, width: 1, height: 1 }]) {
       expect(sanitizeBounds(bad)).toBeUndefined();
     }
+  });
+});
+
+describe('isPermissionAllowed', () => {
+  const x = 'https://x.com/home';
+
+  it('allows the basics x.com needs, only to X pages', () => {
+    expect(isPermissionAllowed('notifications', x)).toBe(true);
+    expect(isPermissionAllowed('notifications', 'https://evil.example/')).toBe(false);
+  });
+
+  it('allows the microphone for Spaces, to X pages only', () => {
+    expect(isPermissionAllowed('media', x, ['audio'])).toBe(true);
+    expect(isPermissionAllowed('media', x, ['unknown'])).toBe(false);
+    expect(isPermissionAllowed('media', 'https://evil.example/', ['audio'])).toBe(false);
+  });
+
+  it('refuses the camera, even together with the microphone', () => {
+    expect(isPermissionAllowed('media', x, ['video'])).toBe(false);
+    expect(isPermissionAllowed('media', x, ['audio', 'video'])).toBe(false);
+    expect(isPermissionAllowed('media', x)).toBe(false);
+  });
+
+  it('refuses everything else', () => {
+    expect(isPermissionAllowed('geolocation', x)).toBe(false);
   });
 });
