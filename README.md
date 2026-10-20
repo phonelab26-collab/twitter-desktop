@@ -31,11 +31,11 @@ Ce que l'app ne contrôle pas : l'onglet « Mon X » **est** x.com. Ce que fait 
 
 ## Installer (macOS)
 
-1. Télécharge `Twitter Desktop-<version>-universal.dmg` dans les [Releases](../../releases). Il fonctionne sur les Mac Intel et Apple Silicon.
+1. Télécharge `Twitter-Desktop-<version>-universal.dmg` dans les [Releases](../../releases). Il fonctionne sur les Mac Intel et Apple Silicon.
 2. **Vérifie le fichier** (recommandé) :
    ```bash
-   shasum -a 256 "Twitter Desktop-<version>-universal.dmg"   # compare avec SHA256SUMS.txt de la release
-   gh attestation verify "Twitter Desktop-<version>-universal.dmg" --repo <propriétaire>/<dépôt>
+   shasum -a 256 "Twitter-Desktop-<version>-universal.dmg"   # compare avec SHA256SUMS.txt de la release
+   gh attestation verify "Twitter-Desktop-<version>-universal.dmg" --repo phonelab26-collab/twitter-desktop
    ```
    La seconde commande prouve que le fichier a été construit par la CI de ce dépôt, à partir d'un commit précis.
 3. Ouvre le DMG et glisse l'app dans Applications.
@@ -53,7 +53,7 @@ npm ci
 npm test            # tests unitaires, sur de vraies réponses de X enregistrées
 npm run typecheck
 npm start           # lance l'app
-npm run package:mac # produit release/Twitter Desktop-<version>-universal.dmg (non signé)
+npm run package:mac # produit release/Twitter-Desktop-<version>-universal.dmg (non signé)
 ```
 
 `npm run e2e` lance l'app réelle et la pilote : il faut un écran et une connexion internet.

@@ -26,6 +26,7 @@
   "build": {
     "appId": "com.community.twitterdesktop",
     "productName": "Twitter Desktop",
+    "artifactName": "Twitter-Desktop-${version}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
