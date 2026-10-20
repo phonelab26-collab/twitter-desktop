@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a tag such as v1.0.0 builds the macOS DMG here, from this exact
+# commit, and publishes it with its SHA-256 and a signed provenance
+# attestation (verify with: gh attestation verify <file> --repo <owner>/<repo>).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # sign the provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package:mac
+      - name: Checksums
+        working-directory: release
+        run: shasum -a 256 *.dmg | tee SHA256SUMS.txt
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*.dmg
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" release/*.dmg release/SHA256SUMS.txt \
+            --verify-tag \
+            --title "$TAG" \
+            --notes "DMG universel (Intel + Apple Silicon), non signé par Apple : voir le README pour le premier lancement.
+
+          Vérifier le fichier :
+          \`shasum -a 256 <fichier.dmg>\` doit correspondre à SHA256SUMS.txt
+          \`gh attestation verify <fichier.dmg> --repo ${{ github.repository }}\`"

@@ -16,6 +16,7 @@
     "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build && electron dist/main/main.js",
     "package": "npm run build && electron-builder",
+    "package:mac": "npm run build && electron-builder --mac dmg --universal -c.mac.identity=null --publish never",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "package:dir": "npm run build && electron-builder --dir -c.mac.identity=null",
