@@ -98,7 +98,9 @@ function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 860,
-    minWidth: 720,
+    // Narrower than this, x.com ("Mon X") switches to its compact layout, where the
+    // Spaces bar covers the message composer.
+    minWidth: 1100,
     minHeight: 500,
     title: 'Twitter Desktop',
     backgroundColor: '#0f1419',
