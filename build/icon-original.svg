@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Twitter Desktop app icon: an original rounded "X" letter, not X Corp's logo.
+       macOS grid: 824 px body centred on a 1024 px canvas. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22303c"/>
+      <stop offset="1" stop-color="#0b0f13"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4cc3ff"/>
+      <stop offset="1" stop-color="#1d9bf0"/>
+    </linearGradient>
+    <!-- userSpaceOnUse: the default box ignores stroke width and clips the halo square. -->
+    <filter id="glow" filterUnits="userSpaceOnUse" x="100" y="100" width="824" height="824">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="104" y="104" width="816" height="816" rx="181" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="8"/>
+
+  <!-- Soft blue glow behind the letter -->
+  <g stroke="#1d9bf0" stroke-opacity="0.55" stroke-width="150" stroke-linecap="round" filter="url(#glow)">
+    <line x1="355" y1="355" x2="669" y2="669"/>
+    <line x1="669" y1="355" x2="355" y2="669"/>
+  </g>
+
+  <!-- The letter: two equal rounded strokes, the rising one in the accent colour -->
+  <line x1="669" y1="355" x2="355" y2="669" stroke="url(#accent)" stroke-width="118" stroke-linecap="round"/>
+  <line x1="355" y1="355" x2="669" y2="669" stroke="#ffffff" stroke-width="118" stroke-linecap="round"/>
+</svg>
