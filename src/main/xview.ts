@@ -10,7 +10,7 @@
  * popups stay on X and the exact sign-in hosts; other links open in the
  * system browser, rate-limited (rules in xpolicy.ts).
  */
-import { app, BrowserWindow, dialog, session, shell, WebContentsView, type Session, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, Notification, session, shell, WebContentsView, type Session, type WebContents } from 'electron';
 import {
   browserUserAgent,
   createOpenLimiter,
@@ -22,7 +22,8 @@ import {
   X_HOME_URL,
   type ViewBounds,
 } from './xpolicy';
-import type { X_LOAD_FAILED_EVENT } from '../shared/ipc';
+import { createUnreadTracker, type Unread } from './unread';
+import { APP_NAVIGATE_EVENT, type X_LOAD_FAILED_EVENT } from '../shared/ipc';
 
 /**
  * Packaged app: persistent, so the login survives restarts; its cookies are
@@ -175,10 +176,59 @@ function guardXContents(contents: WebContents): void {
   contents.on('did-create-window', guardSignInPopup);
 }
 
+/** Dock badge on macOS, launcher badge elsewhere where the platform has one. */
+function setAppBadge(text: string): void {
+  if (process.platform === 'darwin') app.dock?.setBadge(text);
+  else app.setBadgeCount(Number.parseInt(text, 10) || 0);
+}
+
 export class XViewController {
   private view: WebContentsView | null = null;
+  private readonly unread = createUnreadTracker(
+    { setBadge: setAppBadge, notify: (unread) => this.notifyUnread(unread) },
+    () => this.isWatchingX(),
+  );
 
-  constructor(private readonly window: BrowserWindow) {}
+  /** Kept until clicked or closed: a garbage-collected notification loses its click. */
+  private readonly pending = new Set<Notification>();
+  private warnedNoNotifications = false;
+
+  constructor(private readonly window: BrowserWindow) {
+    // The badge outlives the window on macOS: never leave a count with no source.
+    window.on('closed', () => {
+      this.view = null;
+      this.unread.reset();
+    });
+  }
+
+  /** True while the window is focused and the "Mon X" tab is the one on screen. */
+  private isWatchingX(): boolean {
+    return !this.window.isDestroyed() && this.window.isFocused() && Boolean(this.view?.getVisible());
+  }
+
+  /** The text is fixed here: nothing x.com wrote is shown in the notification. */
+  private notifyUnread({ count, overflow }: Unread): void {
+    if (!Notification.isSupported()) {
+      if (!this.warnedNoNotifications) console.warn('Native notifications are not supported here; only the badge is shown.');
+      this.warnedNoNotifications = true;
+      return;
+    }
+    const notification = new Notification({
+      title: 'Twitter Desktop',
+      body: `${count}${overflow ? '+' : ''} notification${count > 1 || overflow ? 's' : ''} non lue${count > 1 || overflow ? 's' : ''} sur X`,
+    });
+    this.pending.add(notification);
+    notification.on('close', () => this.pending.delete(notification));
+    notification.on('click', () => {
+      this.pending.delete(notification);
+      if (this.window.isDestroyed()) return;
+      if (this.window.isMinimized()) this.window.restore();
+      this.window.show();
+      this.window.focus();
+      this.window.webContents.send(APP_NAVIGATE_EVENT, 'x');
+    });
+    notification.show();
+  }
 
   /** Created on first use so the X session only starts when the tab is opened. */
   private ensure(): WebContentsView {
@@ -190,6 +240,7 @@ export class XViewController {
       if (!isMainFrame || code === -3) return;
       this.reportLoadFailure(`x.com n'a pas pu être chargé (${description}, ${originForLog(url)}).`);
     });
+    view.webContents.on('page-title-updated', (_event, title) => this.unread.onTitle(title));
     view.setVisible(false);
     this.window.contentView.addChildView(view);
     load(view.webContents, X_HOME_URL);
@@ -252,6 +303,7 @@ export class XViewController {
         "Seul, cela ne ferme pas la session côté X.",
     });
     if (response === 0) {
+      this.unread.reset();
       load(this.ensure().webContents, X_LOGOUT_URL);
       return 'logout-page';
     }
@@ -262,6 +314,8 @@ export class XViewController {
     } finally {
       // Whatever happened, never keep showing a page from the cleared session.
       if (this.view) load(this.view.webContents, X_HOME_URL);
+      // After the load starts: the old page's last title cannot relight the badge.
+      this.unread.reset();
     }
     return 'cleared';
   }
