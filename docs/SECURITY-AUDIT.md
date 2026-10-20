@@ -63,8 +63,9 @@ défaillances silencieuses), puis corrections, puis vérification en réel.
    les applis intégrées ; e-mail/nom d'utilisateur est la voie sûre).
 4. **Petits points non faits** (faible impact) : annulation des requêtes en cours à la fermeture de la fenêtre,
    délai maximal côté interface, indication visuelle quand un lien externe est ignoré par la limite de 1/s.
-5. **`docs/research/`** contient des bundles JavaScript copiés depuis X et des cookies invités anonymes
-   (`cdp-events.json`) : non livrés dans l'appli, mais à ne pas publier si le dépôt devient public.
+5. **`docs/research/`** (bundles JavaScript copiés depuis X, cookies invités anonymes dans `cdp-events.json`)
+   est **exclu du dépôt public** et purgé de l'historique git ; il reste seulement sur la machine de développement.
+   Les tests utilisent de courts extraits (`src/main/api/__fixtures__/x-web-*.excerpt.js`).
 6. **CGU de X** : un client non officiel reste contraire aux conditions de X ; l'onglet « Mon X » n'automatise rien.
 
 ## Lancer

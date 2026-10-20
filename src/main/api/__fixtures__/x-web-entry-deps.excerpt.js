@@ -1,0 +1,3 @@
+// Excerpt (a few descriptors only) of an x-web bundle chunk served by abs.twimg.com,
+// captured 2026-10-19. Kept solely to test relay-id discovery against real syntax.
+m.f=["assets/trending-section-CgtxtGkE.js","assets/trending-section-wAYRmx5t.js","assets/trending-sidebar-Dr3HFvII.js","assets/whats-happening-C0Od1dzN.js","assets/fade-in-B-dt1LVR.js","assets/use-swr-emll9s78-BInaKB8O.js","assets/new-to-x-card-C6NJ5s7B.js","assets/third-party-C0BRo2Hd.js","assets/icon-at-Coi_hvj3.js","assets/icon-logo-google-color-C9ww5oZ3.js","assets/icon-phone-NiVd_Odi.js","assets/appleLocale-DeLktNYo.js","assets/consent-signal-util-BtRE-Pon.js","assets/use-cookie-preference-state-DEMhApX6.js","assets/install-sentry-tracing-DF9TkiRy.js"]

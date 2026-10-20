@@ -533,7 +533,12 @@ const r = await fetch(`https://api.x.com/graphql/${relayId}/${opName}?variables=
 
 Tous les artefacts de recherche ont été copiés dans le projet :
 
-**`docs/research/`** (dans le projet, donc persistant) :
+> **Non publiés.** `docs/research/` est exclu du dépôt (`.gitignore`) : il contient des bundles
+> JavaScript de X et une capture avec des cookies invités. Il n'existe que sur la machine de
+> développement. Les tests de découverte utilisent de courts extraits dans
+> `src/main/api/__fixtures__/x-web-*.excerpt.js`.
+
+**`docs/research/`** (local uniquement) :
 
 | Fichier | Contenu | Taille |
 |---|---|---|

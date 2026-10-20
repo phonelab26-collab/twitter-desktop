@@ -2,7 +2,7 @@
  * High-level operations for a guest, over three sources (docs/HANDOFF.md §4.1):
  *   - GraphQL API: getProfile, getTweet, getTrendingPosts, searchTopic.
  *     Variables found with the 422 `must be defined` loop
- *     (docs/research/probe25.mjs), roots checked against __fixtures__/<op>.real.json.
+ *     (a local probe script, docs/HANDOFF.md §13), roots checked against __fixtures__/<op>.real.json.
  *   - x.com profile page: getUserTweets. The API refuses UserOriginalsTimeline
  *     to guests (404), but x.com runs it while rendering the page (ssr.ts).
  *   - legacy REST: getTrends, getTrendLocations (1.1/trends/*).

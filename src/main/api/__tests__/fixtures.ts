@@ -1,5 +1,6 @@
 /**
- * Real guest responses captured with docs/research/probe25.mjs (2026-10-19).
+ * Real guest responses captured with a local probe script (2026-10-19; the
+ * research scripts are not published, see docs/HANDOFF.md §13).
  * Each file is the raw body of a 200; the request variables that produced it
  * are listed in docs/HANDOFF.md §4.1. Loaded with JSON.parse rather than a
  * JSON import so tsc does not infer a type for 66 KB payloads.

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Native desktop client for X/Twitter — reverse-engineered GraphQL client",
   "main": "dist/main/main.js",
-  "author": "zineb",
+  "author": "Achraf El Mabrouki",
   "license": "MIT",
   "type": "commonjs",
   "scripts": {

@@ -3,12 +3,13 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { crawlOperations, extractAssetRefs, extractOperations, fetchOperationRegistry, findEntryBundleUrl } from '../discovery';
 
-const RESEARCH_DIR = resolve(__dirname, '../../../../docs/research');
-const readBundle = (name: string): string => readFileSync(resolve(RESEARCH_DIR, name), 'utf8');
+/** Small excerpts of real x-web chunks (the full bundles are X's code and are not redistributed). */
+const FIXTURES_DIR = resolve(__dirname, '../__fixtures__');
+const readBundle = (name: string): string => readFileSync(resolve(FIXTURES_DIR, name), 'utf8');
 
 describe('extractOperations', () => {
   it('extracts the relay id from a real x-web chunk', () => {
-    const { operations: ops, rejected } = extractOperations(readBundle('gen-live.js'));
+    const { operations: ops, rejected } = extractOperations(readBundle('x-web-generic-timeline.excerpt.js'));
 
     expect(rejected).toBe(0);
     expect(ops.get('genericTimelineQuery')).toEqual({
@@ -20,7 +21,7 @@ describe('extractOperations', () => {
   it('never registers response field names as operations', () => {
     // The real URT chunk has `name:`success`` right before the next
     // persisted-query descriptor; a loose regex paired them up.
-    const { operations: ops } = extractOperations(readBundle('create-urt-DsviGh_2.js'));
+    const { operations: ops } = extractOperations(readBundle('x-web-urt-chunk.excerpt.js'));
 
     expect([...ops.keys()].sort()).toEqual([
       'acceptFollowRequestMutation',
@@ -34,7 +35,7 @@ describe('extractOperations', () => {
 
 describe('extractAssetRefs', () => {
   it('lists the chunk references of the real entry bundle', () => {
-    const refs = extractAssetRefs(readBundle('entry-live.js'));
+    const refs = extractAssetRefs(readBundle('x-web-entry-deps.excerpt.js'));
 
     expect(refs.length).toBeGreaterThan(10);
     expect(refs.every((ref) => /^assets\/[\w.\/-]+\.js$/.test(ref))).toBe(true);
