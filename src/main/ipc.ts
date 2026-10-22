@@ -10,6 +10,7 @@ import { Semaphore, WindowBudget } from './budget';
 import { TtlCache } from './cache';
 import { isXUrl, sanitizeInsets, type ViewInsets } from './xpolicy';
 import type { XNavigation, XViewController } from './xview';
+import { AGENT_COPY_KINDS, type AgentCopyKind, type AgentStatus } from '../shared/agent';
 import { IPC_CHANNELS } from '../shared/ipc';
 import type { ApiResult, TrendList, TrendLocation } from '../shared/types';
 
@@ -63,13 +64,27 @@ function requireNavigation(value: unknown): XNavigation {
   return value as XNavigation;
 }
 
+function requireCopyKind(value: unknown): AgentCopyKind {
+  if (typeof value !== 'string' || !(AGENT_COPY_KINDS as readonly string[]).includes(value)) throw invalidArgument('copy kind');
+  return value as AgentCopyKind;
+}
+
 type Handler = (...args: unknown[]) => unknown;
+
+/** The agent link as the Agent tab drives it (agent/link.ts). */
+export interface AgentControl {
+  status(): AgentStatus;
+  setEnabled(on: boolean): Promise<AgentStatus>;
+  regenerateToken(): AgentStatus;
+  copy(kind: AgentCopyKind): Promise<AgentStatus>;
+}
 
 /** What the handlers need from the window that owns them. */
 export interface IpcContext {
   /** Only the main frame of the app's own page may call; x.com (the "Mon X" view) never can. */
   isTrustedSender(event: IpcMainInvokeEvent): boolean;
   xview(): XViewController;
+  agent(): AgentControl;
 }
 
 /** Logs a failed call in the main process (code, status, a bounded body), never its arguments. */
@@ -143,4 +158,12 @@ export function registerIpcHandlers(service: XService, context: IpcContext): voi
   });
   handle(IPC_CHANNELS.xviewNavigate, (action) => context.xview().navigate(requireNavigation(action)));
   handle(IPC_CHANNELS.xviewSignOut, () => context.xview().signOut());
+
+  handle(IPC_CHANNELS.agentStatus, () => context.agent().status());
+  handle(IPC_CHANNELS.agentSetEnabled, (on) => {
+    if (typeof on !== 'boolean') throw invalidArgument('enabled');
+    return context.agent().setEnabled(on);
+  });
+  handle(IPC_CHANNELS.agentRegenerateToken, () => context.agent().regenerateToken());
+  handle(IPC_CHANNELS.agentCopy, (kind) => context.agent().copy(requireCopyKind(kind)));
 }

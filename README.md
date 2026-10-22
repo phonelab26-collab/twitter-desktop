@@ -6,6 +6,7 @@ Un client de bureau macOS pour X (ex-Twitter), open source.
 
 - **Mon X** : le vrai x.com, avec ton compte, dans une fenêtre d'application. Pastille sur l'icône du Dock et notification macOS quand tu as des notifications non lues.
 - **Tendances**, **Profil**, **Sujet** : lisibles **sans compte**, via les accès invités de X.
+- **Agent** (coupé par défaut) : donne à un agent local (Claude Code, un script de trading…) un accès **en lecture seule** au fil que x.com charge dans « Mon X ». Voir [Lien agent](#lien-agent-lecture-seule).
 
 > **Projet non officiel.** Sans lien avec X Corp. « X » et « Twitter » sont des marques de X Corp.
 > Les onglets sans compte utilisent l'API interne (non documentée) du site web de X, ce qui va contre
@@ -23,6 +24,7 @@ Rien ici ne demande à être cru sur parole : tout se vérifie dans le code.
 | **Ta session est chiffrée sur le disque.** Dans l'app installée, les cookies sont chiffrés par le trousseau macOS. En développement, la session reste en mémoire. | `electronFuses` dans [`package.json`](package.json), [`src/main/xview.ts`](src/main/xview.ts) |
 | **Aucune page piège déguisée en X.** La vue n'affiche que des pages X, y compris après une redirection. Les autres liens s'ouvrent dans ton navigateur. | [`src/main/xpolicy.ts`](src/main/xpolicy.ts) et ses tests |
 | **L'app ne contacte que X.** `x.com`, `api.x.com` et les CDN `*.twimg.com`. Aucun serveur à nous, aucune télémétrie, aucune mise à jour automatique. | `git grep "fetch("` : 3 fichiers, tous dans [`src/main/api/`](src/main/api) ; CSP dans [`src/main/main.ts`](src/main/main.ts) |
+| **Le lien agent est coupé par défaut, et local.** Activé (après confirmation), il écoute sur `127.0.0.1` seulement, exige un jeton, refuse tout navigateur, et ne peut rien publier ni modifier. | [`src/main/agent/`](src/main/agent) et ses tests, étapes 13-14 de `npm run e2e` |
 | **Aucune dépendance à l'exécution.** Tout ce qui est dans `package.json` sert à construire ou à tester. React est intégré au build. | [`package.json`](package.json) |
 | **Pas d'option de démarrage dangereuse.** Débogage à distance, proxy et certificats invalides sont refusés dans l'app installée. | [`src/main/guard.ts`](src/main/guard.ts) |
 | **Le DMG correspond au code publié.** Il est construit par GitHub Actions à partir de ce dépôt, avec une empreinte SHA-256 et une attestation de provenance signée. | [`.github/workflows/release.yml`](.github/workflows/release.yml) |
@@ -30,6 +32,36 @@ Rien ici ne demande à être cru sur parole : tout se vérifie dans le code.
 Le détail, avec les limites connues, est dans [`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md).
 
 Ce que l'app ne contrôle pas : l'onglet « Mon X » **est** x.com. Ce que fait x.com (publicité, statistiques de X) s'y passe comme dans un navigateur.
+
+## Lien agent (lecture seule)
+
+Pour brancher un agent (veille de marché, signaux de trading…) sur ton fil X, sans clé d'API X.
+
+1. Onglet **Agent** → **Activer le lien agent** (une fenêtre de confirmation explique ce qui est partagé).
+2. Copie la commande Claude Code proposée et lance-la **dans le dossier de ton agent** : seul Claude Code ouvert dans ce dossier verra ton fil. Le presse-papier est vidé au bout d'une minute ou à la fermeture de l'app ; la commande, elle, reste dans l'historique du terminal et dans `~/.claude.json`.
+   ```bash
+   claude mcp add --transport http --scope local x-desktop http://127.0.0.1:47821/mcp --header "Authorization: Bearer <jeton>"
+   ```
+   Tout client MCP (transport HTTP) marche de la même façon. Pour un script, chaque outil existe aussi en JSON simple :
+   ```bash
+   curl -s -X POST http://127.0.0.1:47821/api/tools/get_feed -H "Authorization: Bearer $X_DESKTOP_TOKEN" -H "Content-Type: application/json" -d '{"limit":20}'
+   ```
+3. Laisse l'onglet **Mon X** ouvert sur l'**accueil** : l'agent voit ce que x.com y charge.
+
+| Outil | Ce qu'il donne |
+|---|---|
+| `get_feed` | Les posts que x.com a chargés (accueil, recherches, listes, profils ouverts), filtrables par cashtag, texte, auteur, source. Suivi sans perte : `after_seq` = `nextSeq` de l'appel précédent, avec le même `epoch`. |
+| `cashtag_stats` | Les cashtags (`$TSLA`) des posts écrits dans une fenêtre de temps : posts, auteurs distincts, j'aime, reposts et vues connus. |
+| `feed_status` | Si la capture tourne, quand elle a vu un post pour la dernière fois, si x.com est à l'écran. |
+| `get_user_posts`, `get_topic_posts`, `get_trending_posts`, `get_trends`, `get_post`, `get_profile` | Les données visibles **sans compte**, avec un petit quota réservé à l'agent (le reste est pour l'app). |
+
+Limites, voulues :
+- **Rien n'est demandé en plus à X** : l'app lit le trafic que x.com fait déjà dans « Mon X ». Caché ou réduit, x.com rafraîchit moins souvent ; `feed_status` le dit.
+- **Jamais transmis** : les posts des comptes protégés, ou dont X ne dit pas qu'ils sont publics, tes signets, tes j'aime, tes notifications et tes messages. Les publicités sont exclues par défaut. Les listes (même privées) et les communautés que tu ouvres sont lues.
+- **Seuls les fils connus sont lus** (liste blanche). Un fil que l'app ne reconnaît pas, par exemple renommé par X, n'est pas lu mais affiché dans l'onglet Agent.
+- **En mémoire seulement** (2 000 posts au plus), vidé quand tu coupes le lien, changes de compte ou te déconnectes.
+- **Les posts sont écrits par n'importe qui** et peuvent contenir des instructions piégées : ne laisse pas un agent passer un ordre sur la seule foi d'un post, et ne lui donne pas aussi un terminal ou ton compte de courtier. Si l'agent utilise un modèle en ligne, les posts qu'il lit partent chez ce fournisseur. Rien ici n'est un conseil financier.
+- Coût mesuré, lien activé : environ +5 % d'un cœur pour le processus principal pendant qu'une vidéo défile, sans perte de fluidité (60 images/s dans les deux cas).
 
 ## Installer (macOS)
 

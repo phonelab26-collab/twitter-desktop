@@ -126,6 +126,7 @@ export function parseAuthor(node: unknown): TweetAuthor | undefined {
     name: firstString(core?.name, user.name),
     avatarUrl: mediaUrl(firstString(avatar?.image_url, user.profile_image_url_https, user.avatar_image_url)),
     verified: knownFlag(verification?.is_blue_verified, user.is_blue_verified, user.verified, legacy?.verified),
+    protected: knownFlag(asRecord(user.privacy)?.protected, user.is_protected, legacy?.protected),
   };
 }
 
@@ -328,6 +329,7 @@ export function parseTweet(node: unknown, depth = 0): Tweet | undefined {
     media,
     unparsedMediaCount: skipped > 0 ? skipped : undefined,
     quotedTweet: quote.quotedTweet,
+    retweetedTweet: retweetSignal && depth < MAX_QUOTE_DEPTH ? parseTweet(retweetSignal, depth + 1) : undefined,
     inReplyToScreenName: inReplyTo,
     conversationId: firstString(core.conversation_id_str, legacy?.conversation_id_str),
   };
@@ -439,9 +441,13 @@ function timelineEntries(node: unknown): { entries: Array<{ entry: Json; pinned:
     const single = asRecord(instruction?.entry);
     if (ENTRIES_INSTRUCTIONS.has(type) && !Array.isArray(instruction?.entries)) malformed += 1;
     if (ENTRY_INSTRUCTIONS.has(type) && !single) malformed += 1;
+    // A null or non-object entry is a broken payload, not an empty one.
+    const listed = asArray(instruction?.entries);
+    const records = listed.filter((entry) => asRecord(entry) !== undefined);
+    malformed += listed.length - records.length;
     // A profile's pinned post comes as its own TimelinePinEntry instruction (real capture).
     const pinned = type === 'TimelinePinEntry';
-    return [...asArray(instruction?.entries), ...(single ? [single] : [])].map((entry) => ({ entry, pinned }));
+    return [...records, ...(single ? [single] : [])].map((entry) => ({ entry, pinned }));
   });
   return { entries, malformed };
 }
@@ -466,14 +472,16 @@ function itemPayload(content: Json): Json {
 
 /**
  * The payloads of an entry: one for a plain item, several for a module
- * (`content.items[]`, e.g. a conversation thread on a profile timeline).
+ * (`content.items[]`, e.g. a conversation thread on a profile timeline),
+ * and how many module items were not objects.
  */
-function entryPayloads(entry: Json): Json[] {
+function entryPayloads(entry: Json): { payloads: Json[]; malformed: number } {
   const content = asRecord(entry.content);
-  if (!content) return [];
+  if (!content) return { payloads: [], malformed: 0 };
   const moduleItems = asArray(content.items);
-  if (moduleItems.length === 0) return [itemPayload(content)];
-  return moduleItems.map((moduleItem) => itemPayload(moduleItem));
+  if (moduleItems.length === 0) return { payloads: [itemPayload(content)], malformed: 0 };
+  const records = moduleItems.filter((moduleItem) => asRecord(moduleItem) !== undefined);
+  return { payloads: records.map((moduleItem) => itemPayload(moduleItem)), malformed: moduleItems.length - records.length };
 }
 
 /** Real URT responses spell it `entry_id`; older captures used `entryId`. */
@@ -493,26 +501,55 @@ function isBottomCursor(entry: Json, payload: Json): boolean {
   return payload.cursorType === 'Bottom' || entryId(entry).startsWith('cursor-bottom');
 }
 
-/**
- * Walks a Relay timeline response and returns its tweets and the cursor of
- * the next (older) page. Only the Bottom cursor paginates forward; the Top
- * cursor would loop back to newer content. Only known non-posts (the guest
- * "Log in" prompt, cursors) and unavailable tweets are skipped. Anything else
- * that does not parse, and any instruction missing its entries, is counted in
- * `unrecognised`, so callers can tell schema drift from an empty page.
- */
-export function parseTimelineEntries(node: unknown): {
-  tweets: Tweet[];
+export interface TimelineItem {
+  tweet: Tweet;
+  /** Came as a TimelinePinEntry: the post a profile pins above its timeline. */
+  pinned: boolean;
+  /** Marked as an ad by its entry (`promotedMetadata`, classic schema): not an organic post. */
+  promoted: boolean;
+}
+
+export interface TimelineItems {
+  items: TimelineItem[];
+  /** The Bottom cursor (next, older page); null when the timeline gave none. */
   cursor: string | null;
-  unrecognised: number;
-} {
-  const tweets: Tweet[] = [];
-  const { entries, malformed } = timelineEntries(node);
-  let unrecognised = malformed;
+  /** Post entries (TimelineTweet) whose post no longer parses: schema drift. */
+  unreadable: number;
+  /** Entries that are not posts nor known non-posts (suggested users, trends...). */
+  otherEntries: number;
+  /** Instructions missing the entries they should carry. */
+  malformed: number;
+}
+
+/** An entry payload that announces a post, whether or not the post still parses. */
+function isPostPayload(payload: Json): boolean {
+  return payload.__typename === 'TimelineTweet' || payload.itemType === 'TimelineTweet' || payload.tweet_results !== undefined;
+}
+
+function isPromoted(payload: Json): boolean {
+  return asRecord(payload.promotedMetadata) !== undefined || asRecord(payload.promoted_metadata) !== undefined;
+}
+
+/**
+ * Walks a Relay timeline response: its posts (with what their entry says
+ * about them), the cursor of the next (older) page, and what was not read.
+ * Only the Bottom cursor paginates forward; the Top cursor would loop back to
+ * newer content. Known non-posts (the guest "Log in" prompt, cursors) and
+ * unavailable tweets are skipped; everything else is counted, so callers can
+ * tell schema drift from an empty page.
+ */
+export function parseTimelineItems(node: unknown): TimelineItems {
+  const items: TimelineItem[] = [];
+  const timeline = timelineEntries(node);
+  let malformed = timeline.malformed;
+  let unreadable = 0;
+  let otherEntries = 0;
   let cursor: string | null = null;
 
-  for (const { entry, pinned } of entries) {
-    for (const payload of entryPayloads(entry)) {
+  for (const { entry, pinned } of timeline.entries) {
+    const { payloads, malformed: brokenItems } = entryPayloads(entry);
+    malformed += brokenItems;
+    for (const payload of payloads) {
       if (isCursor(entry, payload)) {
         if (isBottomCursor(entry, payload) && typeof payload.value === 'string' && payload.value) {
           cursor = payload.value;
@@ -522,17 +559,36 @@ export function parseTimelineEntries(node: unknown): {
 
       const tweet = parseTweet(payload);
       if (tweet) {
-        tweets.push(pinned ? { ...tweet, pinned: true } : tweet);
+        items.push({ tweet, pinned, promoted: isPromoted(payload) });
         continue;
       }
       if (KNOWN_NON_TWEET_PAYLOADS.has(String(payload.__typename))) continue;
       const type = tweetResultType(payload);
       if (type && UNAVAILABLE_TWEET_TYPES.has(type)) continue;
-      unrecognised += 1;
+      if (isPostPayload(payload)) unreadable += 1;
+      else otherEntries += 1;
     }
   }
 
-  return { tweets, cursor, unrecognised };
+  return { items, cursor, unreadable, otherEntries, malformed };
+}
+
+/**
+ * The tweets of a timeline (pinned ones flagged) and its next cursor. Every
+ * entry that was not read, and any instruction missing its entries, is
+ * counted in `unrecognised`.
+ */
+export function parseTimelineEntries(node: unknown): {
+  tweets: Tweet[];
+  cursor: string | null;
+  unrecognised: number;
+} {
+  const { items, cursor, unreadable, otherEntries, malformed } = parseTimelineItems(node);
+  return {
+    tweets: items.map(({ tweet, pinned }) => (pinned ? { ...tweet, pinned: true } : tweet)),
+    cursor,
+    unrecognised: malformed + unreadable + otherEntries,
+  };
 }
 
 const COUNT_UNITS: ReadonlyArray<readonly [number, string]> = [

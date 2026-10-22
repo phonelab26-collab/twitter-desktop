@@ -82,7 +82,7 @@ GraphQL 150–500 selon l'op.
 **Bonus non branché** : la page `x.com/<h>/status/<id>` embarque `TweetDetail` (`V14mpBzQZSbyXl_KTNYbJg`)
 avec le fil de réponses — utilisable pour une vue « tweet + réponses » (`ssr.ts` sait déjà l'extraire).
 
-### 0.4 Performance (2026-10-22)
+### 0.4 Performance et lien agent (2026-10-22)
 
 **Performance** (mesurée sur le MacBook Pro Intel i5 / Iris Plus de l'utilisateur, sondes Electron jetables) :
 - Le premier `fetch()` du processus principal chargeait undici et gelait l'interface 85-95 ms au premier onglet :
@@ -92,6 +92,19 @@ avec le fil de réponses — utilisable pour une vue « tweet + réponses » (`s
 - Préconnexion x.com, abs.twimg.com, api.x.com, pbs.twimg.com, video.twimg.com dès `ready` : la 1re requête vers
   x.com et abs.twimg.com n'attend plus le TLS (~180-200 ms chacun).
 - Mesuré sans gain, donc laissé : le flou `backdrop-filter` des en-têtes (60 images/s avec ou sans).
+
+**Lien agent** (`src/main/agent/`, onglet Agent, ⌘5) : serveur MCP (2025-06-18, HTTP, réponses JSON) et JSON simple
+sur `127.0.0.1:47821` (47822 en dev), jeton, capture du trafic de « Mon X » par `webContents.debugger`
+(`cdpTap.ts`, liste fermée de commandes), tampon mémoire (`feedStore.ts`), outils (`tools.ts`, `guestTools.ts`).
+- **Les relay ids tournent** : le 2026-10-22, la page de profil live utilisait `QEZVpYuKRU9V5jj86lkkNw`… au lieu de
+  `dm5QEQ6Zg_QrdzrCDhMN6w` (snapshot). La capture reconnaît donc les fils rendus côté serveur par la forme de la
+  réponse (`classifyTimelinePath`), comme `service.getUserTweets`.
+- **Listes blanches partout** (après revues de code et de sécurité) : opérations GraphQL par nom exact
+  (`genericTimelineQuery` exclu : il pagine n'importe quel fil), pages `/home`, `/search`, `/<compte>`,
+  `/<compte>/status/<id>`, clés SSR connues ; un post n'est servi que si son auteur est connu public.
+- **Non vérifié avec un compte connecté** (aucun compte de test) : noms et formes des réponses du fil d'accueil.
+  L'onglet Agent affiche les fils non reconnus (`unrecognised`), les formats non lus et les entrées illisibles :
+  c'est par là qu'on verra un écart. Vérifié en réel : profil invité capturé (e2e étape 14).
 
 ---
 

@@ -7,12 +7,15 @@
 import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 import type { AppView } from '../shared/ipc';
 
-const TABS: ReadonlyArray<readonly [AppView, string]> = [
+const TABS = [
   ['x', 'Mon X'],
   ['trends', 'Tendances'],
   ['profile', 'Profil'],
   ['topic', 'Sujet'],
-];
+  ['agent', 'Agent'],
+] as const satisfies ReadonlyArray<readonly [AppView, string]>;
+/** Compile-time check that every view has its menu entry (and its ⌘ shortcut). */
+const ALL_TABS_LISTED: Exclude<AppView, (typeof TABS)[number][0]> extends never ? true : never = true;
 
 /** `navigate` switches the app tab; the shortcuts work even while x.com has the focus. */
 export function installMenu(navigate: (view: AppView) => void): void {
@@ -33,7 +36,7 @@ export function installMenu(navigate: (view: AppView) => void): void {
     { label: 'Affichage', submenu: view },
     {
       label: 'Aller à',
-      submenu: TABS.map(([name, label], index) => ({
+      submenu: (ALL_TABS_LISTED ? TABS : []).map(([name, label], index) => ({
         label,
         accelerator: `CmdOrCtrl+${index + 1}`,
         click: () => navigate(name),

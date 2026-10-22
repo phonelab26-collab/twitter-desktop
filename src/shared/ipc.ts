@@ -3,6 +3,7 @@
  * talks to X directly: it calls `window.xapi`, exposed by the preload through
  * contextBridge, and every call is validated again in the main process.
  */
+import type { AgentCopyKind, AgentStatus } from './agent';
 import type {
   ApiResult,
   CursorPage,
@@ -27,6 +28,10 @@ export const IPC_CHANNELS = {
   xviewOpen: 'xview:open',
   xviewNavigate: 'xview:navigate',
   xviewSignOut: 'xview:signOut',
+  agentStatus: 'agent:status',
+  agentSetEnabled: 'agent:setEnabled',
+  agentRegenerateToken: 'agent:regenerateToken',
+  agentCopy: 'agent:copy',
 } as const;
 
 /** Main → renderer: x.com failed to load in the "Mon X" view (payload: a message). */
@@ -34,9 +39,9 @@ export const X_LOAD_FAILED_EVENT = 'xview:loadFailed';
 
 export type XSignOutResult = 'cleared' | 'logout-page' | 'cancelled';
 
-/** Main → renderer: switch tab (menu shortcuts ⌘1-⌘4). Payload: one of APP_VIEWS. */
+/** Main → renderer: switch tab (menu shortcuts ⌘1-⌘5). Payload: one of APP_VIEWS. */
 export const APP_NAVIGATE_EVENT = 'app:navigate';
-export const APP_VIEWS = ['x', 'trends', 'profile', 'topic'] as const;
+export const APP_VIEWS = ['x', 'trends', 'profile', 'topic', 'agent'] as const;
 export type AppView = (typeof APP_VIEWS)[number];
 
 /**
@@ -80,5 +85,14 @@ export interface XApi {
     signOut(): Promise<ApiResult<XSignOutResult>>;
     /** Calls `listener` when x.com fails to load; returns the unsubscribe function. */
     onLoadFailed(listener: (message: string) => void): () => void;
+  };
+  /** The agent link (read-only access to the captured X feed for a local agent). */
+  agent: {
+    status(): Promise<ApiResult<AgentStatus>>;
+    /** Turning it on asks for confirmation in a main-process dialog. */
+    setEnabled(on: boolean): Promise<ApiResult<AgentStatus>>;
+    regenerateToken(): Promise<ApiResult<AgentStatus>>;
+    /** Copies on the main side: the token never reaches the page. */
+    copy(kind: AgentCopyKind): Promise<ApiResult<AgentStatus>>;
   };
 }

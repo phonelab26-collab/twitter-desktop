@@ -43,6 +43,8 @@ export interface TweetAuthor {
   avatarUrl?: string;
   /** Undefined when the payload states nothing about it. */
   verified?: boolean;
+  /** A protected account: only its approved followers see its posts. Undefined when unknown. */
+  protected?: boolean;
 }
 
 export interface Tweet {
@@ -73,6 +75,8 @@ export interface Tweet {
   unparsedMediaCount?: number;
   /** Undefined when the quoted tweet is unavailable, even if isQuote is true. */
   quotedTweet?: Tweet;
+  /** The reposted post in full (a repost's own text is a truncated "RT @…"); undefined when unavailable. */
+  retweetedTweet?: Tweet;
   inReplyToScreenName?: string;
   /** Real guest captures carry no conversation_id_str: usually undefined. */
   conversationId?: string;

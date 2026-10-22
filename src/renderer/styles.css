@@ -521,3 +521,38 @@ button {
   cursor: pointer;
   margin-bottom: 4px;
 }
+
+/* "Agent": the agent link. */
+.agent-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.agent-label {
+  flex: 0 0 104px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.agent-code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.agent-facts {
+  margin: 0;
+  padding: 12px 16px 12px 32px;
+  line-height: 1.6;
+}
+
+.agent-error {
+  color: var(--danger);
+}

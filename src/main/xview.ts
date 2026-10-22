@@ -25,6 +25,7 @@ import {
   type ViewInsets,
 } from './xpolicy';
 import { createUnreadTracker, type Unread } from './unread';
+import { createAccountWatcher } from './agent/account';
 import { APP_NAVIGATE_EVENT, type X_LOAD_FAILED_EVENT } from '../shared/ipc';
 
 /**
@@ -54,6 +55,17 @@ const X_PRECONNECT: ReadonlyArray<{ url: string; numSockets: number }> = [
 ];
 
 export type XNavigation = 'back' | 'forward' | 'reload' | 'home';
+
+/** What the agent link (main.ts) hears about the x.com view. */
+export interface XViewHooks {
+  /** The view exists: its WebContents, and whether x.com is on screen and where. */
+  viewCreated(contents: WebContents, probe: { isVisible(): boolean; url(): string }): void;
+  viewClosed(): void;
+  signedOut(): void;
+}
+
+/** X's cookie holding the signed-in user id ("u=<id>"). */
+const ACCOUNT_COOKIE = 'twid';
 
 /** Main → renderer event: x.com failed to load in the "Mon X" view. */
 const X_LOAD_FAILED_CHANNEL: typeof X_LOAD_FAILED_EVENT = 'xview:loadFailed';
@@ -177,6 +189,21 @@ export function warmUpXSession(): void {
   xSession();
 }
 
+/** Calls `listener` when another X account signs in, or the account signs out (inside x.com too). */
+export function onXAccountChange(listener: () => void): void {
+  const xs = xSession();
+  const watcher = createAccountWatcher(listener);
+  xs.cookies.on('changed', (_event, cookie, cause, removed) => {
+    if (cookie.name === ACCOUNT_COOKIE && cookie.domain !== undefined && /(^|\.)(x|twitter)\.com$/.test(cookie.domain.replace(/^\./, ''))) {
+      watcher.observe({ value: cookie.value, removed, cause });
+    }
+  });
+  xs.cookies
+    .get({ name: ACCOUNT_COOKIE, domain: 'x.com' })
+    .then((cookies) => watcher.seed(cookies[0]?.value ?? null))
+    .catch((error: unknown) => console.error('Could not read the X account cookie:', error));
+}
+
 function guardXContents(contents: WebContents): void {
   confine(contents, isXUrl, () => load(contents, X_HOME_URL));
   contents.setWindowOpenHandler(({ url, referrer }) => {
@@ -218,11 +245,15 @@ export class XViewController {
   private readonly pending = new Set<Notification>();
   private warnedNoNotifications = false;
 
-  constructor(private readonly window: BrowserWindow) {
+  constructor(
+    private readonly window: BrowserWindow,
+    private readonly hooks?: XViewHooks,
+  ) {
     // The badge outlives the window on macOS: never leave a count with no source.
     window.on('closed', () => {
       this.view = null;
       this.unread.reset();
+      this.hooks?.viewClosed();
     });
     // Applied in the resize itself: x.com never trails the window edge while it moves.
     window.on('resize', () => this.layout());
@@ -274,6 +305,11 @@ export class XViewController {
     this.window.contentView.addChildView(view);
     load(view.webContents, X_HOME_URL);
     this.view = view;
+    this.hooks?.viewCreated(view.webContents, {
+      // x.com refreshes at full speed only while really on screen.
+      isVisible: () => !this.window.isDestroyed() && this.window.isVisible() && !this.window.isMinimized() && view.getVisible(),
+      url: () => view.webContents.getURL(),
+    });
     return view;
   }
 
@@ -352,10 +388,12 @@ export class XViewController {
     });
     if (response === 0) {
       this.unread.reset();
+      this.hooks?.signedOut();
       load(this.ensure().webContents, X_LOGOUT_URL);
       return 'logout-page';
     }
     if (response !== 1) return 'cancelled';
+    this.hooks?.signedOut();
     try {
       await xSession().clearStorageData();
       await xSession().clearCache();

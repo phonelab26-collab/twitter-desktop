@@ -21,10 +21,17 @@ const CHANNELS = {
   xviewOpen: 'xview:open',
   xviewNavigate: 'xview:navigate',
   xviewSignOut: 'xview:signOut',
+  agentStatus: 'agent:status',
+  agentSetEnabled: 'agent:setEnabled',
+  agentRegenerateToken: 'agent:regenerateToken',
+  agentCopy: 'agent:copy',
 } as const satisfies typeof IPC_CHANNELS;
 const LOAD_FAILED: typeof X_LOAD_FAILED_EVENT = 'xview:loadFailed';
 const NAVIGATE: typeof APP_NAVIGATE_EVENT = 'app:navigate';
-const VIEWS: ReadonlySet<string> = new Set<AppView>(['x', 'trends', 'profile', 'topic']);
+const VIEW_NAMES = ['x', 'trends', 'profile', 'topic', 'agent'] as const satisfies readonly AppView[];
+/** Compile-time check that no view is missing: a forgotten one would drop its menu shortcut silently. */
+const ALL_VIEWS_LISTED: Exclude<AppView, (typeof VIEW_NAMES)[number]> extends never ? true : never = true;
+const VIEWS: ReadonlySet<string> = new Set<string>(ALL_VIEWS_LISTED ? VIEW_NAMES : []);
 
 const xapi: XApi = {
   getProfile: (screenName) => ipcRenderer.invoke(CHANNELS.getProfile, screenName),
@@ -62,6 +69,12 @@ const xapi: XApi = {
         ipcRenderer.removeListener(LOAD_FAILED, relay);
       };
     },
+  },
+  agent: {
+    status: () => ipcRenderer.invoke(CHANNELS.agentStatus),
+    setEnabled: (on) => ipcRenderer.invoke(CHANNELS.agentSetEnabled, on),
+    regenerateToken: () => ipcRenderer.invoke(CHANNELS.agentRegenerateToken),
+    copy: (kind) => ipcRenderer.invoke(CHANNELS.agentCopy, kind),
   },
 };
 

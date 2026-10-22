@@ -5,11 +5,17 @@
  * Every step asserts; the first failure stops the run with exit code 1 and the
  * step name. Screenshots of each step go to $E2E_OUT (default: the OS temp dir).
  */
-const { app, Menu } = require('electron');
+const { app, clipboard, dialog, Menu, safeStorage } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+
+// The agent link asks for confirmation in a native dialog a script cannot click: answer "Activer".
+dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+// Never touch the developer's keychain from a test run: the token then lives in memory only.
+safeStorage.isEncryptionAvailable = () => false;
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.E2E_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'twitter-desktop-e2e-'));
@@ -63,6 +69,22 @@ const submitInput = (selector, value) =>
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.form.requestSubmit();
   })()`);
+
+/** One MCP call to the agent link, as Claude Code would send it. */
+function mcp(url, token, method, params) {
+  const { port, pathname } = new URL(url);
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
+  const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'mcp-protocol-version': '2025-06-18' };
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, path: pathname, method: 'POST', headers }, (res) => {
+      let text = '';
+      res.on('data', (chunk) => (text += chunk));
+      res.on('end', () => resolve({ status: res.statusCode, json: text ? JSON.parse(text) : null }));
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
 
 async function step(name, run) {
   const started = Date.now();
@@ -159,13 +181,42 @@ async function scenario() {
       const menu = Menu.getApplicationMenu().items.find((item) => item.label === 'Aller à');
       const item = menu.submenu.items.find((entry) => entry.label === label);
       assert.ok(item, `no menu item ${label}`);
-      assert.match(item.accelerator, /^CmdOrCtrl\+[1-4]$/);
+      assert.match(item.accelerator, /^CmdOrCtrl\+[1-5]$/);
       item.click();
     };
     goTo('Mon X');
     await until('X view shown', () => xview().getVisible());
     goTo('Sujet');
     await until('topic view', async () => !xview().getVisible() && (await js(`document.querySelector('h1')?.innerText`)) === 'Sujet');
+  });
+
+  await step('13 the Agent tab hides x.com and shows the link state', async () => {
+    await clickButton('Agent');
+    await until('agent view', async () => !xview().getVisible() && (await js(`document.querySelector('h1')?.innerText`)) === 'Agent');
+    const status = await js('window.xapi.agent.status()');
+    assert.ok(status.ok);
+    if (status.data.enabled) assert.equal((await js('window.xapi.agent.setEnabled(false)')).data.enabled, false);
+    await until('toggle', () => js(`[...document.querySelectorAll('button')].some((b) => b.innerText.includes('Activer le lien agent'))`));
+  });
+
+  await step('14 an agent reads the posts x.com loaded, with the token only, until the link is cut', async () => {
+    const on = await js('window.xapi.agent.setEnabled(true)');
+    assert.equal(on.data.enabled, true, on.data.server.message);
+    assert.doesNotMatch(JSON.stringify(on.data), /Bearer [A-Za-z0-9_-]{43}/, 'the token reached the UI');
+    await js(`window.xapi.agent.copy('token')`);
+    const token = await clipboard.readText();
+    await clipboard.writeText('');
+    xview().webContents.loadURL('https://x.com/NASA');
+    const url = on.data.server.url;
+    const feed = await until('captured posts', async () => {
+      const reply = await mcp(url, token, 'tools/call', { name: 'get_feed', arguments: { limit: 5 } });
+      return reply.json.result.structuredContent.posts.length > 0 && reply.json.result.structuredContent;
+    });
+    assert.ok(feed.posts.every((post) => post.url.startsWith('https://x.com/') && post.sources.includes('profile')));
+    assert.equal((await mcp(url, 'x'.repeat(43), 'ping')).status, 401);
+    const off = await js('window.xapi.agent.setEnabled(false)');
+    assert.equal(off.data.capture.posts, 0);
+    await assert.rejects(mcp(url, token, 'ping'), /ECONNREFUSED/);
   });
 }
 

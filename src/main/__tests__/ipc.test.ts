@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { XService } from '../api/service';
-import { registerIpcHandlers, type IpcContext } from '../ipc';
+import { registerIpcHandlers, type AgentControl, type IpcContext } from '../ipc';
 import type { XViewController } from '../xview';
 import { IPC_CHANNELS } from '../../shared/ipc';
 import type { ApiResult, TrendLocation } from '../../shared/types';
@@ -35,9 +35,16 @@ function setup(options: { trusted?: boolean } = {}) {
     navigate: vi.fn(),
     signOut: vi.fn(async () => 'cancelled'),
   };
+  const agent = {
+    status: vi.fn(() => ({ enabled: false })),
+    setEnabled: vi.fn(async (on: boolean) => ({ enabled: on })),
+    regenerateToken: vi.fn(() => ({ enabled: true })),
+    copy: vi.fn(() => ({ enabled: true })),
+  };
   const context: IpcContext = {
     isTrustedSender: () => options.trusted ?? true,
     xview: () => xview as unknown as XViewController,
+    agent: () => agent as unknown as AgentControl,
   };
   registerIpcHandlers(service as unknown as XService, context);
   const call = (channel: string, ...args: unknown[]) => {
@@ -45,7 +52,7 @@ function setup(options: { trusted?: boolean } = {}) {
     if (!handler) throw new Error(`no handler for ${channel}`);
     return handler({}, ...args);
   };
-  return { service, xview, call };
+  return { service, xview, agent, call };
 }
 
 const errorCode = (result: ApiResult<unknown>) => (result.ok ? undefined : result.error.code);
@@ -65,6 +72,35 @@ describe('IPC trust', () => {
     }
     expect(service.getProfile).not.toHaveBeenCalled();
     expect(xview.signOut).not.toHaveBeenCalled();
+  });
+});
+
+describe('IPC agent link', () => {
+  it('turns the link on or off only with a boolean', async () => {
+    const { agent, call } = setup();
+
+    expect(errorCode(await call(IPC_CHANNELS.agentSetEnabled, 'yes'))).toBe('INVALID_INPUT');
+    expect(agent.setEnabled).not.toHaveBeenCalled();
+    expect(await call(IPC_CHANNELS.agentSetEnabled, true)).toEqual({ ok: true, data: { enabled: true } });
+  });
+
+  it('copies only a known kind of value', async () => {
+    const { agent, call } = setup();
+
+    for (const kind of ['password', '', 42, 'token; rm -rf']) expect(errorCode(await call(IPC_CHANNELS.agentCopy, kind))).toBe('INVALID_INPUT');
+    expect(agent.copy).not.toHaveBeenCalled();
+    expect((await call(IPC_CHANNELS.agentCopy, 'claudeCommand')).ok).toBe(true);
+    expect(agent.copy).toHaveBeenCalledWith('claudeCommand');
+  });
+
+  it('refuses the agent channels to an untrusted sender too', async () => {
+    const { agent, call } = setup({ trusted: false });
+
+    await call(IPC_CHANNELS.agentSetEnabled, true);
+    await call(IPC_CHANNELS.agentCopy, 'token');
+
+    expect(agent.setEnabled).not.toHaveBeenCalled();
+    expect(agent.copy).not.toHaveBeenCalled();
   });
 });
 

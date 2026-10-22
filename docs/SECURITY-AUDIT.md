@@ -68,6 +68,27 @@ défaillances silencieuses), puis corrections, puis vérification en réel.
    Les tests utilisent de courts extraits (`src/main/api/__fixtures__/x-web-*.excerpt.js`).
 6. **CGU de X** : un client non officiel reste contraire aux conditions de X ; l'onglet « Mon X » n'automatise rien.
 
+## Lien agent (2026-10-22)
+
+Accès local, en lecture seule, au fil capturé dans « Mon X » (`src/main/agent/`). Revue de conception
+par un agent *planner* avant le code, puis revues de code et de sécurité indépendantes : aucun point
+critique ; les points hauts et moyens (ci-dessous) sont corrigés et couverts par des tests.
+
+| Risque | Protection | Vérifié |
+|---|---|---|
+| Un programme local lit le fil sans y être autorisé | Coupé par défaut ; activation confirmée dans une fenêtre du processus principal ; jeton de 256 bits exigé à chaque requête, comparé en temps constant | Tests `server`, `link` ; e2e étape 14 (401 sans le bon jeton) |
+| Une page web (CSRF, *DNS rebinding*) atteint le serveur | Écoute sur `127.0.0.1` seulement ; en-tête `Host` imposé ; toute requête portant `Origin` refusée ; aucun en-tête CORS | Tests `server` |
+| Fuite du jeton | Jamais envoyé à l'interface (copié par le processus principal, masqué à l'écran) ; effacé du presse-papier après 1 min et à la fermeture de l'app ; chiffré sur disque par le trousseau, ou gardé en mémoire seulement ; jamais journalisé ; renouvelé si le port est déjà pris ; commande Claude Code en portée `local` (un seul dossier) | Tests `settings`, `link`, `ipc` |
+| Le débogueur (nécessaire pour lire le trafic de x.com) détourné pour agir sur le compte | Liste fermée de commandes (`Network.enable`, `Network.disable`, `Network.getResponseBody`) appliquée deux fois : autour du débogueur d'Electron (`restrictDebugger`) et dans la capture. Ni script, ni clic, ni cookies ; les événements portant les en-têtes bruts sont ignorés | Tests `cdpTap` |
+| Vie privée | Listes blanches : seules les opérations GraphQL de fils connus (par nom exact, sans `genericTimelineQuery` qui pagine n'importe quel fil) et les pages `/home`, `/search`, `/<compte>`, `/<compte>/status/<id>` sont lues ; signets, j'aime, notifications, messages jamais lus ; un post n'est servi que si X dit que son auteur (et celui qu'il cite) est public ; publicités exclues par défaut ; rien sur le disque ; vidé au changement de compte (cookie `twid`) et à la déconnexion | Tests `capture`, `feedStore`, `account` |
+| Injection d'instructions par un post | Outils en lecture seule ; caractères invisibles (balises Unicode, contrôles bidi, espaces de largeur nulle) retirés des textes ; avertissement dans chaque réponse portant des posts, dans la description des outils et dans les `instructions` MCP ; conseil affiché de ne pas donner à cet agent un terminal ni un compte de courtage | Tests `feedStore` (texte piégé) |
+| Quotas invités de X épuisés par un agent | Budgets propres à l'agent (60 appels / 15 min ; tendances 4 / 15 min, l'interface en gardant 10 sous la limite de 15 de X) et caches | Tests `guest` |
+| Gel de l'interface par du trafic ou une requête hostile | Corps HTTP plafonné à 64 Ko ; délais d'en-têtes, de requête et d'inactivité (10 s) ; 16 connexions ; parcours JSON borné ; 8 corps lus à la fois ; 50 noms d'opération comptés au plus ; une lecture qui échoue est comptée, jamais perdue | Tests `server`, `capture`, `cdpTap` |
+
+Limites connues : la forme des réponses du fil connecté n'a pas pu être vérifiée (pas de compte de test) ;
+l'onglet Agent affiche les fils non reconnus et les entrées illisibles, c'est là qu'un écart se verra.
+Le jeton figure en clair dans `~/.claude.json` et l'historique du terminal une fois la commande lancée.
+
 ## Lancer
 
 ```bash
