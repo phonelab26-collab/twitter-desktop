@@ -29,7 +29,7 @@ function setup(options: { trusted?: boolean } = {}) {
   };
   const xview = {
     show: vi.fn(),
-    setBounds: vi.fn(),
+    setInsets: vi.fn(),
     hide: vi.fn(),
     open: vi.fn(),
     navigate: vi.fn(),
@@ -74,7 +74,7 @@ describe('IPC argument checks', () => {
 
     expect(errorCode(await call(IPC_CHANNELS.getProfile, 42))).toBe('INVALID_INPUT');
     expect(errorCode(await call(IPC_CHANNELS.getTrends, '1'))).toBe('INVALID_INPUT');
-    expect(errorCode(await call(IPC_CHANNELS.xviewShow, { x: -1 }))).toBe('INVALID_INPUT');
+    expect(errorCode(await call(IPC_CHANNELS.xviewShow, { left: -1 }))).toBe('INVALID_INPUT');
     expect(errorCode(await call(IPC_CHANNELS.xviewNavigate, 'exec'))).toBe('INVALID_INPUT');
     expect(service.getProfile).not.toHaveBeenCalled();
   });

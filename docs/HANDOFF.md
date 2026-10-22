@@ -82,6 +82,17 @@ GraphQL 150–500 selon l'op.
 **Bonus non branché** : la page `x.com/<h>/status/<id>` embarque `TweetDetail` (`V14mpBzQZSbyXl_KTNYbJg`)
 avec le fil de réponses — utilisable pour une vue « tweet + réponses » (`ssr.ts` sait déjà l'extraire).
 
+### 0.4 Performance (2026-10-22)
+
+**Performance** (mesurée sur le MacBook Pro Intel i5 / Iris Plus de l'utilisateur, sondes Electron jetables) :
+- Le premier `fetch()` du processus principal chargeait undici et gelait l'interface 85-95 ms au premier onglet :
+  préchargé avant `ready` (`main.ts`), ~25 ms de plus au lancement, premier appel ~15 ms.
+- La vue x.com suivait le redimensionnement avec 20-85 ms de retard (aller-retour vers le renderer) :
+  le processus principal calcule maintenant les bornes à partir des marges (`boundsFromInsets`, zoom compris) : 2-5 ms.
+- Préconnexion x.com, abs.twimg.com, api.x.com, pbs.twimg.com, video.twimg.com dès `ready` : la 1re requête vers
+  x.com et abs.twimg.com n'attend plus le TLS (~180-200 ms chacun).
+- Mesuré sans gain, donc laissé : le flou `backdrop-filter` des en-têtes (60 images/s avec ou sans).
+
 ---
 
 ## 1. Objectif

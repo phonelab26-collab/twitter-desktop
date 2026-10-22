@@ -11,10 +11,18 @@ import { createXService } from './api/service';
 import { failStart, installGlobalGuards, refuseDangerousSwitches } from './guard';
 import { registerIpcHandlers } from './ipc';
 import { installMenu } from './menu';
-import { XViewController } from './xview';
+import { warmUpXSession, XViewController } from './xview';
 import { APP_NAVIGATE_EVENT } from '../shared/ipc';
 
 refuseDangerousSwitches();
+
+/**
+ * Node loads its fetch implementation on first use: measured, the first call
+ * to X froze the window for 85-95 ms (the first tab opened after start).
+ * Loading it now, before any window exists, delays 'ready' by about 25 ms
+ * (median of 8 launches) and leaves that first call at about 15 ms.
+ */
+setImmediate(() => void globalThis.Headers);
 
 if (!app.isPackaged) {
   // Development never shares a profile with the packaged app (whose cookies are encrypted)
@@ -161,7 +169,7 @@ function showDevDockIcon(): void {
 
 async function start(): Promise<void> {
   await app.whenReady();
-  showDevDockIcon();
+  warmUpXSession();
   installGlobalGuards();
   hardenDefaultSession();
   installMenu((view) => {
@@ -178,6 +186,8 @@ async function start(): Promise<void> {
   // The app opens on "Mon X": start loading x.com while the app page loads.
   current?.xview.warmUp();
   await loadApp(window);
+  // Development only, and slow (~400 ms to decode the 1024 px icon): after the window is up.
+  showDevDockIcon();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length > 0) return;

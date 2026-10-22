@@ -16,7 +16,7 @@ const CHANNELS = {
   getTrendLocations: 'xapi:getTrendLocations',
   openExternal: 'app:openExternal',
   xviewShow: 'xview:show',
-  xviewSetBounds: 'xview:setBounds',
+  xviewSetInsets: 'xview:setInsets',
   xviewHide: 'xview:hide',
   xviewOpen: 'xview:open',
   xviewNavigate: 'xview:navigate',
@@ -46,8 +46,8 @@ const xapi: XApi = {
     };
   },
   xview: {
-    show: (bounds) => ipcRenderer.invoke(CHANNELS.xviewShow, bounds),
-    setBounds: (bounds) => ipcRenderer.invoke(CHANNELS.xviewSetBounds, bounds),
+    show: (insets) => ipcRenderer.invoke(CHANNELS.xviewShow, insets),
+    setInsets: (insets) => ipcRenderer.invoke(CHANNELS.xviewSetInsets, insets),
     hide: () => ipcRenderer.invoke(CHANNELS.xviewHide),
     open: (url) => ipcRenderer.invoke(CHANNELS.xviewOpen, url),
     navigate: (action) => ipcRenderer.invoke(CHANNELS.xviewNavigate, action),

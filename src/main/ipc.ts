@@ -8,7 +8,7 @@ import { ApiError, ERROR_CODES, toResult } from './api/client';
 import type { XService } from './api/service';
 import { Semaphore, WindowBudget } from './budget';
 import { TtlCache } from './cache';
-import { isXUrl, sanitizeBounds, type ViewBounds } from './xpolicy';
+import { isXUrl, sanitizeInsets, type ViewInsets } from './xpolicy';
 import type { XNavigation, XViewController } from './xview';
 import { IPC_CHANNELS } from '../shared/ipc';
 import type { ApiResult, TrendList, TrendLocation } from '../shared/types';
@@ -50,10 +50,10 @@ export function externalUrl(value: unknown): string {
   return url.toString();
 }
 
-function requireBounds(value: unknown): ViewBounds {
-  const bounds = sanitizeBounds(value);
-  if (!bounds) throw invalidArgument('bounds');
-  return bounds;
+function requireInsets(value: unknown): ViewInsets {
+  const insets = sanitizeInsets(value);
+  if (!insets) throw invalidArgument('insets');
+  return insets;
 }
 
 const NAVIGATIONS: ReadonlySet<string> = new Set(['back', 'forward', 'reload', 'home']);
@@ -133,8 +133,8 @@ export function registerIpcHandlers(service: XService, context: IpcContext): voi
     await shell.openExternal(externalUrl(url));
   });
 
-  handle(IPC_CHANNELS.xviewShow, (bounds) => context.xview().show(requireBounds(bounds)));
-  handle(IPC_CHANNELS.xviewSetBounds, (bounds) => context.xview().setBounds(requireBounds(bounds)));
+  handle(IPC_CHANNELS.xviewShow, (insets) => context.xview().show(requireInsets(insets)));
+  handle(IPC_CHANNELS.xviewSetInsets, (insets) => context.xview().setInsets(requireInsets(insets)));
   handle(IPC_CHANNELS.xviewHide, () => context.xview().hide());
   handle(IPC_CHANNELS.xviewOpen, (url) => {
     const target = requireString(url, 'url');

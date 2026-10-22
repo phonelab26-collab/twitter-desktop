@@ -116,14 +116,42 @@ export interface ViewBounds {
   height: number;
 }
 
-/** Bounds sent by the renderer: finite, non-negative, rounded. Undefined if malformed. */
-export function sanitizeBounds(value: unknown): ViewBounds | undefined {
+/** Space the app UI keeps around x.com, from each edge of the window content area. */
+export interface ViewInsets {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * Insets sent by the renderer: finite, rounded, not negative. A sub-pixel
+ * negative value (a fractional zoom makes the measured rect overhang the
+ * window by a fraction) is 0; anything else out of range is malformed.
+ */
+export function sanitizeInsets(value: unknown): ViewInsets | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const record = value as Record<string, unknown>;
-  const numbers = ['x', 'y', 'width', 'height'].map((key) => record[key]);
-  if (!numbers.every((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n < 100_000)) {
+  const numbers = ['left', 'top', 'right', 'bottom'].map((key) => record[key]);
+  if (!numbers.every((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > -1 && n < 100_000)) {
     return undefined;
   }
-  const [x, y, width, height] = numbers.map((n) => Math.round(n as number));
-  return { x, y, width, height };
+  const [left, top, right, bottom] = numbers.map((n) => Math.max(0, Math.round(n as number)));
+  return { left, top, right, bottom };
+}
+
+/**
+ * Where x.com goes for a window content size. The main process applies it on
+ * every 'resize', so the view follows the window in the same frame instead of
+ * waiting for the renderer to measure and send new bounds. The insets are CSS
+ * pixels of the app UI: `zoom` (its zoom factor) turns them into window pixels.
+ */
+export function boundsFromInsets(contentWidth: number, contentHeight: number, insets: ViewInsets, zoom = 1): ViewBounds {
+  const [left, top, right, bottom] = [insets.left, insets.top, insets.right, insets.bottom].map((n) => Math.round(n * zoom));
+  return {
+    x: left,
+    y: top,
+    width: Math.max(0, contentWidth - left - right),
+    height: Math.max(0, contentHeight - top - bottom),
+  };
 }

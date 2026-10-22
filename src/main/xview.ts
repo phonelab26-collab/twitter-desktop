@@ -12,6 +12,7 @@
  */
 import { app, BrowserWindow, dialog, Notification, session, shell, WebContentsView, type Session, type WebContents } from 'electron';
 import {
+  boundsFromInsets,
   browserUserAgent,
   createOpenLimiter,
   isSignInFlowUrl,
@@ -21,7 +22,7 @@ import {
   popupDecision,
   webHref,
   X_HOME_URL,
-  type ViewBounds,
+  type ViewInsets,
 } from './xpolicy';
 import { createUnreadTracker, type Unread } from './unread';
 import { APP_NAVIGATE_EVENT, type X_LOAD_FAILED_EVENT } from '../shared/ipc';
@@ -40,6 +41,17 @@ const DOWNLOAD_DOMAINS = ['x.com', 'twitter.com', 'twimg.com'];
 const EXTERNAL_OPEN_INTERVAL_MS = 1000;
 /** The app's own background (main.ts), shown by the view until x.com paints. */
 const X_VIEW_BACKGROUND = '#0f1419';
+/**
+ * Hosts x.com loads from first (page, scripts, API, images, video), opened
+ * while the app starts so their DNS and TLS overlap with x.com's server time.
+ */
+const X_PRECONNECT: ReadonlyArray<{ url: string; numSockets: number }> = [
+  { url: X_HOME_URL, numSockets: 2 },
+  { url: 'https://abs.twimg.com/', numSockets: 1 },
+  { url: 'https://api.x.com/', numSockets: 1 },
+  { url: 'https://pbs.twimg.com/', numSockets: 1 },
+  { url: 'https://video.twimg.com/', numSockets: 1 },
+];
 
 export type XNavigation = 'back' | 'forward' | 'reload' | 'home';
 
@@ -108,8 +120,7 @@ function xSession(): Session {
     isPermissionAllowed(permission, requestingOrigin, details.mediaType ? [details.mediaType] : []),
   );
   xs.setSpellCheckerEnabled(false);
-  // Open the connection to x.com before the first request needs it.
-  xs.preconnect({ url: X_HOME_URL, numSockets: 2 });
+  for (const target of X_PRECONNECT) xs.preconnect(target);
   xs.on('will-download', (event, item) => {
     if (!isDownloadAllowed(item.getURL())) {
       console.warn(`Blocked a download from ${originForLog(item.getURL())}.`);
@@ -158,6 +169,14 @@ function guardSignInPopup(popup: BrowserWindow): void {
   });
 }
 
+/**
+ * Configures the X session and opens its connections. Called as soon as the
+ * app is ready, before the window exists: x.com is the first thing shown.
+ */
+export function warmUpXSession(): void {
+  xSession();
+}
+
 function guardXContents(contents: WebContents): void {
   confine(contents, isXUrl, () => load(contents, X_HOME_URL));
   contents.setWindowOpenHandler(({ url, referrer }) => {
@@ -188,6 +207,8 @@ function setAppBadge(text: string): void {
 
 export class XViewController {
   private view: WebContentsView | null = null;
+  /** Set by the renderer when the tab is shown; the bounds follow from the window size. */
+  private insets: ViewInsets | null = null;
   private readonly unread = createUnreadTracker(
     { setBadge: setAppBadge, notify: (unread) => this.notifyUnread(unread) },
     () => this.isWatchingX(),
@@ -203,6 +224,8 @@ export class XViewController {
       this.view = null;
       this.unread.reset();
     });
+    // Applied in the resize itself: x.com never trails the window edge while it moves.
+    window.on('resize', () => this.layout());
   }
 
   /** True while the window is focused and the "Mon X" tab is the one on screen. */
@@ -262,15 +285,26 @@ export class XViewController {
     this.ensure();
   }
 
-  show(bounds: ViewBounds): void {
+  show(insets: ViewInsets): void {
     const view = this.ensure();
-    view.setBounds(bounds);
+    this.insets = insets;
+    this.layout(true);
     view.setVisible(true);
     view.webContents.focus();
   }
 
-  setBounds(bounds: ViewBounds): void {
-    this.view?.setBounds(bounds);
+  /** The app UI moved (a banner appeared, the sidebar changed): new insets, same window. */
+  setInsets(insets: ViewInsets): void {
+    this.insets = insets;
+    this.layout();
+  }
+
+  /** Hidden (another tab is open), x.com is laid out again when shown, not on every resize. */
+  private layout(evenIfHidden = false): void {
+    if (!this.view || !this.insets || this.window.isDestroyed()) return;
+    if (!evenIfHidden && !this.view.getVisible()) return;
+    const [width, height] = this.window.getContentSize();
+    this.view.setBounds(boundsFromInsets(width, height, this.insets, this.window.webContents.getZoomFactor()));
   }
 
   hide(): void {

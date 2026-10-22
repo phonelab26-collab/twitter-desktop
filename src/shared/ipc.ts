@@ -22,7 +22,7 @@ export const IPC_CHANNELS = {
   getTrendLocations: 'xapi:getTrendLocations',
   openExternal: 'app:openExternal',
   xviewShow: 'xview:show',
-  xviewSetBounds: 'xview:setBounds',
+  xviewSetInsets: 'xview:setInsets',
   xviewHide: 'xview:hide',
   xviewOpen: 'xview:open',
   xviewNavigate: 'xview:navigate',
@@ -39,12 +39,15 @@ export const APP_NAVIGATE_EVENT = 'app:navigate';
 export const APP_VIEWS = ['x', 'trends', 'profile', 'topic'] as const;
 export type AppView = (typeof APP_VIEWS)[number];
 
-/** Where the "Mon X" tab draws x.com, in CSS pixels of the app window. */
-export interface XViewBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+/**
+ * Space the app UI keeps around x.com in the "Mon X" tab, in CSS pixels from
+ * each edge of the window: the main process derives the bounds on every resize.
+ */
+export interface XViewInsets {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 export type XViewNavigation = 'back' | 'forward' | 'reload' | 'home';
@@ -67,8 +70,8 @@ export interface XApi {
   onNavigate(listener: (view: AppView) => void): () => void;
   /** The real x.com with the user's own session ("Mon X" tab). */
   xview: {
-    show(bounds: XViewBounds): Promise<ApiResult<void>>;
-    setBounds(bounds: XViewBounds): Promise<ApiResult<void>>;
+    show(insets: XViewInsets): Promise<ApiResult<void>>;
+    setInsets(insets: XViewInsets): Promise<ApiResult<void>>;
     hide(): Promise<ApiResult<void>>;
     /** Loads an https x.com / twitter.com page in the tab. */
     open(url: string): Promise<ApiResult<void>>;

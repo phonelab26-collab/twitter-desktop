@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPermissionAllowed, browserUserAgent, createOpenLimiter, isSignInFlowUrl, isXUrl, popupDecision, sanitizeBounds, webHref } from '../xpolicy';
+import { isPermissionAllowed, browserUserAgent, createOpenLimiter, isSignInFlowUrl, isXUrl, popupDecision, boundsFromInsets, sanitizeInsets, webHref } from '../xpolicy';
 
 describe('isXUrl', () => {
   it('accepts https pages of x.com and twitter.com', () => {
@@ -84,15 +84,36 @@ describe('browserUserAgent', () => {
   });
 });
 
-describe('sanitizeBounds', () => {
-  it('rounds valid bounds', () => {
-    expect(sanitizeBounds({ x: 220.4, y: 48.6, width: 800, height: 600.2 })).toEqual({ x: 220, y: 49, width: 800, height: 600 });
+describe('sanitizeInsets', () => {
+  it('rounds valid insets', () => {
+    expect(sanitizeInsets({ left: 220.4, top: 48.6, right: 0, bottom: 0.2 })).toEqual({ left: 220, top: 49, right: 0, bottom: 0 });
   });
 
-  it('rejects malformed bounds', () => {
-    for (const bad of [null, 'x', { x: 1, y: 2, width: 3 }, { x: -1, y: 0, width: 1, height: 1 }, { x: NaN, y: 0, width: 1, height: 1 }]) {
-      expect(sanitizeBounds(bad)).toBeUndefined();
-    }
+  it('rounds a sub-pixel negative inset (fractional zoom) to 0 instead of refusing it', () => {
+    expect(sanitizeInsets({ left: 220.4, top: 45, right: -0.3, bottom: -0.5 })).toEqual({ left: 220, top: 45, right: 0, bottom: 0 });
+  });
+
+  it('rejects malformed insets', () => {
+    const bad = [null, 'x', { left: 1, top: 2, right: 3 }, { left: -1, top: 0, right: 0, bottom: 0 }, { left: NaN, top: 0, right: 0, bottom: 0 }];
+    for (const value of bad) expect(sanitizeInsets(value)).toBeUndefined();
+  });
+});
+
+describe('boundsFromInsets', () => {
+  it('fills the window content area minus the insets', () => {
+    expect(boundsFromInsets(1280, 860, { left: 221, top: 45, right: 0, bottom: 0 })).toEqual({ x: 221, y: 45, width: 1059, height: 815 });
+  });
+
+  it('follows a new window size with the same insets', () => {
+    expect(boundsFromInsets(1100, 700, { left: 221, top: 45, right: 10, bottom: 5 })).toEqual({ x: 221, y: 45, width: 869, height: 650 });
+  });
+
+  it('converts the insets from CSS pixels when the app UI is zoomed', () => {
+    expect(boundsFromInsets(1280, 860, { left: 220, top: 40, right: 0, bottom: 0 }, 1.25)).toEqual({ x: 275, y: 50, width: 1005, height: 810 });
+  });
+
+  it('never returns a negative size when the insets exceed the window', () => {
+    expect(boundsFromInsets(200, 30, { left: 221, top: 45, right: 0, bottom: 0 })).toEqual({ x: 221, y: 45, width: 0, height: 0 });
   });
 });
 
